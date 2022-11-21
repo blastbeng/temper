@@ -29,6 +29,7 @@ import re
 import select
 import struct
 import sys
+from flask import has_request_context
 
 # Non-standard modules
 try:
@@ -202,33 +203,43 @@ class USBRead(object):
 
     if info['firmware'][:10] in [ 'TEMPerF1.4', 'TEMPer1F1.' ]:
       info['firmware'] = info['firmware'][:10]
-      self._parse_bytes('internal temperature', 2, 256.0, bytes, info)
+      self._parse_bytes('internal_temperature', 2, 256.0, bytes, info)
       return info
 
     if info['firmware'][:15] == 'TEMPerGold_V3.1':
       info['firmware'] = info['firmware'][:15]
-      self._parse_bytes('internal temperature', 2, 100.0, bytes, info)
+      self._parse_bytes('internal_temperature', 2, 100.0, bytes, info)
       return info
 
     if info['firmware'][:12] in [ 'TEMPerX_V3.1', 'TEMPerX_V3.3' ]:
       info['firmware'] = info['firmware'][:12]
-      self._parse_bytes('internal temperature', 2, 100.0, bytes, info)
-      self._parse_bytes('internal humidity', 4, 100.0, bytes, info)
-      self._parse_bytes('external temperature', 10, 100.0, bytes, info)
-      self._parse_bytes('external humidity', 12, 100.0, bytes, info)
+      self._parse_bytes('internal_temperature', 2, 100.0, bytes, info)
+      self._parse_bytes('internal_humidity', 4, 100.0, bytes, info)
+      self._parse_bytes('external_temperature', 10, 100.0, bytes, info)
+      self._parse_bytes('external_humidity', 12, 100.0, bytes, info)
       return info
 
     if info['firmware'][:16] == 'TEMPer2_M12_V1.3':
       info['firmware'] = info['firmware'][:16]
-      self._parse_bytes('internal temperature', 2, 256.0, bytes, info)
-      self._parse_bytes('external temperature', 4, 256.0, bytes, info)
+      self._parse_bytes('internal_temperature', 2, 256.0, bytes, info)
+      self._parse_bytes('external_temperature', 4, 256.0, bytes, info)
       return info
     if info['firmware'][:12] == 'TEMPer2_V3.7':
       info['firmware'] = info['firmware'][:12]
       #Bytes 3-4 hold the device temp, divide by 100
-      self._parse_bytes('internal temperature', 2, 100.0, bytes, info, self.verbose)
+      self._parse_bytes('internal_temperature', 2, 100.0, bytes, info, self.verbose)
       #Bytes 11-12 hold the external temp, divide by 100
-      self._parse_bytes('external temperature', 10, 100.0, bytes, info, self.verbose)
+      self._parse_bytes('external_temperature', 10, 100.0, bytes, info, self.verbose)
+      return info
+
+    if info['firmware'][:16] == 'TEMPer2_V3.9':
+      info['firmware'] = info['firmware'][:16]
+      #Bytes 3-4 hold the device temp, divide by 100
+      self._parse_bytes('internal_temperature', 2, 100.0, bytes, info, self.verbose)
+      #Bytes 11-12 hold the external temp, divide by 100
+      self._parse_bytes('external_temperature', 10, 100.0, bytes, info, self.verbose)
+      #Bytes 5-6 hold the device humidity, divide by 100
+      self._parse_bytes('internal_humidity', 4, 100.0, bytes, info)
       return info
 
     info['error'] = 'Unknown firmware %s: %s' % (info['firmware'],
@@ -268,12 +279,12 @@ class USBRead(object):
     info['firmware'] = firmware
     m = re.search(r'Temp-Inner:([0-9.]*).*, ?([0-9.]*)', reply)
     if m is not None:
-      info['internal temperature'] = float(m.group(1))
-      info['internal humidity'] = float(m.group(2))
+      info['internal_temperature'] = float(m.group(1))
+      info['internal_humidity'] = float(m.group(2))
     m = re.search(r'Temp-Outer:([0-9.]*)', reply)
     if m is not None:
       try:
-        info['external temperature'] = float(m.group(1))
+        info['external_temperature'] = float(m.group(1))
       except:
         pass
     return info
@@ -405,51 +416,10 @@ class Temper(object):
         s += ' ' + self._add_humidity('external humidity', info)
       print(s)
 
-  def main(self):
-    '''An example 'main' entry point that can be used to make temper.py a
-    standalone program.
-    '''
+  def get_data(self):
+    results = self.read(False)
+    return results[0]
 
-    parser = argparse.ArgumentParser(description='temper')
-    parser.add_argument('-l', '--list', action='store_true',
-                        help='List all USB devices')
-    parser.add_argument('--json', action='store_true',
-                        help='Provide output as JSON')
-    parser.add_argument('--force', type=str,
-                        help='Force the use of the hex id; ignore other ids',
-                        metavar=('VENDOR_ID:PRODUCT_ID'))
-    parser.add_argument('--verbose', action='store_true',
-                        help='Output binary data from thermometer')
-    args = parser.parse_args()
-    self.verbose = args.verbose
-
-    if args.list:
-      self.list(args.json)
-      return 0
-
-    if args.force:
-      ids = args.force.split(':')
-      if len(ids) != 2:
-        print('Cannot parse hexadecimal id: %s' % args.force)
-        return 1
-      try:
-        vendor_id = int(ids[0], 16)
-        product_id = int(ids[1], 16)
-      except:
-        print('Cannot parse hexadecimal id: %s' % args.force)
-        return 1
-      self.forced_vendor_id = vendor_id;
-      self.forced_product_id = product_id;
-
-    # By default, output the temperature and humidity for all known sensors.
-    results = self.read(args.verbose)
-    self.print(results, args.json)
-    return 0
-
-
-def main():
+def get_data():
   temper = Temper()
-  sys.exit(temper.main())
-
-if __name__ == "__main__":
-  main()
+  return temper.get_data()

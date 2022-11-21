@@ -1,0 +1,17 @@
+---
+version: "3.3"
+services:
+  temper-rest:
+    build: .
+    container_name: temper-rest
+    environment:
+      - PUID=0
+      - PGID=0
+      - TZ=Europe/Rome
+    image: "temper-rest:latest"
+    restart: "no"
+    volumes:
+      - "/dev/hidraw0:/dev/hidraw0"
+      - "/dev/hidraw1:/dev/hidraw1"
+    ports:
+      - 5279:5279
